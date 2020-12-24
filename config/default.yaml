@@ -1,0 +1,65 @@
+gpu: 'cuda:0'
+---
+eval:
+  type: 'cplx'  # cplx, mag
+---
+train:
+  epoch: 50
+  batch_size: 12
+  num_workers: 16
+  optimizer: 'adam'
+  adam: 0.0001
+  adabound:
+    initial: 0.001
+    final: 0.05
+  frame_num: 128
+  fs: 16
+  SNR:
+    - 0
+    - -5
+    - -10
+  summary_interval: 10
+  validation_interval: 100
+  checkpoint_interval: 1000
+  type: 'R' # R,C
+---
+loss:
+  type: 'wSDR'
+---
+scheduler: # Plateau, oneCycle, None
+  type: 'Plateau'
+  oneCycle:
+    max_lr: 0.0001
+  Plateau:
+    mode: 'min'
+    patience: 2
+    factor: 0.5
+    min_lr: 0.000005
+---
+data:
+  test_train_ratio: 0.2
+  root: '/home/nas/user/kbh/'
+  wav : '/home/nas/user/kbh/'
+  pkl : '/home/nas/user/kbh/'
+---
+  log:
+    root: '/home/nas/user/kbh//'
+    chkpt_dir: 'chkpt'
+    log_dir  : 'logs'
+---
+form:
+  input: '*-norm.wav'
+  target:
+    wav: '*-target.wav'
+    mag: '*-target.pt'
+  mixed:
+    wav: '*-mixed.wav'
+    mag: '*-mixed.pt'
+---
+model:
+---
+audio:
+  n_fft: 1200
+  num_freq: 601 # n_fft//2 + 1
+  sample_rate: 16000
+
