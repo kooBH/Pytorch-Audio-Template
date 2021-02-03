@@ -12,6 +12,9 @@ class MyWriter(SummaryWriter):
     def log_training(self, train_loss, step):
         self.add_scalar('train_loss', train_loss, step)
 
+    def log_evaluation_scalar(self, test_loss,step): 
+        self.add_scalar('test_loss', test_loss, step)
+
     def log_evaluation(self, test_loss,
                        mixed_wav, target_wav, est_wav,
 #                       mixed_spec, target_spec, est_spec,

@@ -4,14 +4,11 @@ import torchaudio
 import os
 import numpy as np
 
-from fairseq import utils
 from tensorboardX import SummaryWriter
-from datasets.pickleDataset import pickleDataset
-
-from model.model import Model
-
 from utils.hparams import HParam
 from utils.writer import MyWriter
+
+## import model & dataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -30,26 +27,23 @@ if __name__ == '__main__':
     device = hp.gpu
     torch.cuda.set_device(device)
 
-    SNR = hp.train.SNR
+    ## get parameters
+
     batch_size = hp.train.batch_size
-    frame_num = hp.train.frame_num
     num_epochs = hp.train.epoch
     num_workers = hp.train.num_workers
 
+    ## dirs
     modelsave_path = args.modelsave_path +'/'+ args.version_name
-    if not os.path.exists(modelsave_path):
-        os.makedirs(modelsave_path)
-
     log_dir = hp.log.root+args.version_name
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    pickle_path = hp.data.pkl
+    
+    os.makedirs(modelsave_path,exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
 
     writer = MyWriter(hp, log_dir)
 
-    train_dataset = pickleDataset(pickle_path,'train',hp)
-    val_dataset = pickleDataset(pickle_path,'test', hp)
+    train_dataset = MyDataset(some_path,'train',hp)
+    val_dataset = MyDataset(some_path,'test', hp)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
@@ -82,36 +76,18 @@ if __name__ == '__main__':
         model.train()
         train_loss=0
         for i, (batch_data) in enumerate(train_loader):
-
             step +=1
 
-            audio_real = batch_data["audio_data_Real"][0].to(device)
-            audio_imagine = batch_data["audio_data_Imagine"][0].to(device)
-            target_audio = batch_data["audio_wav"][1].squeeze(1).to(device)
-            input_audio = batch_data["audio_wav"][0].squeeze(1).to(device)
-            
-            mask_r, mask_i = model(audio_real, audio_imagine)
+            input_data = batch_data['input'].to(device)
+            target_data = batch_data['target'].to(device)
+           
+            output_data = model(input_data)
 
-            # Respectively
-            if hp.train.type =='R':
-                enhance_r = audio_real * mask_r
-                enhance_i = audio_imagine * mask_i
-            # Complex operation : CRM
-            else :
-                enhance_r = audio_real * mask_r - audio_imagine * mask_i
-                enhance_i = audio_real * mask_i + audio_imagine * mask_r
-
-            enhance_r = enhance_r.unsqueeze(3)
-            enhance_i = enhance_i.unsqueeze(3)
-            enhance_spec = torch.cat((enhance_r,enhance_i),3)
-            audio_me_pe = complex_demand_audio(enhance_spec,window,audio_maxlen,fs)
-
-            #print(audio_me_pe.shape)
-
-            loss = criterion(input_audio,target_audio,audio_me_pe,eps=1e-8).to(device)
+            loss = criterion(output_data,target_data).to(device)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
             print('TRAIN::Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
             train_loss+=loss.item()
 
@@ -126,26 +102,11 @@ if __name__ == '__main__':
         with torch.no_grad():
             val_loss =0.
             for j, (batch_data) in enumerate(val_loader):
-                audio_real = batch_data["audio_data_Real"][0].to(device)
-                audio_imagine = batch_data["audio_data_Imagine"][0].to(device)
-                target_audio = batch_data["audio_wav"][1].squeeze(1).to(device)
-                input_audio = batch_data["audio_wav"][0].squeeze(1).to(device)
+                input_data = batch_data['input'].to(device)
+                target_data = batch_data['target'].to(device)
             
-                mask_r, mask_i = model(audio_real, audio_imagine)
-                # Respectively
-                if hp.train.type =='R':
-                    enhance_r = audio_real * mask_r
-                    enhance_i = audio_imagine * mask_i
-                # Complex operation : CRM
-                else :
-                    enhance_r = audio_real * mask_r - audio_imagine * mask_i
-                    enhance_i = audio_real * mask_i + audio_imagine * mask_r
-
-                enhance_r = enhance_r.unsqueeze(3)
-                enhance_i = enhance_i.unsqueeze(3)
-                enhance_spec = torch.cat((enhance_r,enhance_i),3)
-                audio_me_pe = complex_demand_audio(enhance_spec,window,audio_maxlen,fs).to(device)
-                
+                output_data = model(input_data)
+               
                 loss = criterion(input_audio,target_audio,audio_me_pe,eps=1e-8).to(device)
                 print('TEST::Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, j+1, len(val_loader), loss.item()))
                 val_loss +=loss.item()
@@ -157,10 +118,7 @@ if __name__ == '__main__':
             target_audio= target_audio[0].cpu().numpy()
             audio_me_pe= audio_me_pe[0].cpu().numpy()
 
-            writer.log_evaluation(val_loss,
-                                  input_audio,target_audio,audio_me_pe,
-                                  #input_spec, target_spec,enhance_spec,
-                                  step)
+            writer.log_evaluation_scalar(val_loss,                                step)
 
             if best_loss > val_loss:
                 torch.save(model.state_dict(), str(modelsave_path)+'/bestmodel.pt')
