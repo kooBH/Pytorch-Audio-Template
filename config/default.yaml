@@ -1,5 +1,9 @@
 gpu: 'cuda:0'
 ---
+model:
+  m1:
+    param1 : 1
+---
 eval:
   type: 'cplx'  # cplx, mag
 ---
@@ -38,28 +42,13 @@ scheduler: # Plateau, oneCycle, None
 ---
 data:
   test_train_ratio: 0.2
-  root: '/home/nas/user/kbh/'
-  wav : '/home/nas/user/kbh/'
-  pkl : '/home/nas/user/kbh/'
+  root: '/home/data/'
 ---
   log:
-    root: '/home/nas/user/kbh//'
-    chkpt_dir: 'chkpt'
-    log_dir  : 'logs'
----
-form:
-  input: '*-norm.wav'
-  target:
-    wav: '*-target.wav'
-    mag: '*-target.pt'
-  mixed:
-    wav: '*-mixed.wav'
-    mag: '*-mixed.pt'
----
-model:
+    root: '/home/nas/user/kbh/'
 ---
 audio:
-  n_fft: 1200
-  num_freq: 601 # n_fft//2 + 1
+  frame : 1024
+  shift : 256
   sample_rate: 16000
 
