@@ -38,11 +38,14 @@ if __name__ == '__main__':
     os.makedirs(output_dir,exist_ok=True)
 
     ## Dataset
+    # TODO ?
     test_dataset = TestsetModel(hp.data.root,hp)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=1,shuffle=False,num_workers=1)
 
     ## Model
+    # TODO
     model = Model().to(device)
+
     model.load_state_dict(torch.load(test_model,map_location=device))
     model.eval()
     print('NOTE::Loading pre-trained model : ' + test_model)
@@ -50,6 +53,7 @@ if __name__ == '__main__':
 
     with torch.no_grad():
         for i, (data,data_dir,data_name) in enumerate(tqdm(test_loader)):
+            # TODO
             data_input = data.to(device)
             data_output = model(data_input)
 
@@ -57,6 +61,7 @@ if __name__ == '__main__':
 
             audio = audio.to('cpu')
 
+            # TODO
             ## Normalize
             max_val = torch.max(torch.abs(audio_me_pe))
             audio_me_pe = audio_me_pe/max_val

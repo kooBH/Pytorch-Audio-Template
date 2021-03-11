@@ -53,25 +53,29 @@ if __name__ == '__main__':
 
     writer = MyWriter(hp, log_dir)
 
-
     ## target
 
-    list_train= ['tr05_bus_simu','tr05_caf_simu','tr05_ped_simu','tr05_str_simu']
-    list_test= ['dt05_bus_simu','dt05_caf_simu','dt05_ped_simu','dt05_str_simu','et05_bus_simu','et05_caf_simu','et05_ped_simu','et05_str_simu']
+    ## TODO
+    list_train= ['','']
+    list_test= ['','']
 
-    train_dataset = DatasetModel(hp.data.root+'/STFT_R',list_train,'*.npy',block=block)
-    test_dataset= DatasetModel(hp.data.root+'/STFT_R',list_test,'*.npy',block=block)
+    # TODO
+    train_dataset = DatasetModel(hp.data.root+'/STFT',list_train,'*.npy',block=block)
+    test_dataset= DatasetModel(hp.data.root+'/STFT',list_test,'*.npy',block=block)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
 
+    # TODO
     model = ModelModel(hp).to(device)
 
     if not args.chkpt == None : 
         print('NOTE::Loading pre-trained model : '+ args.chkpt)
         model.load_state_dict(torch.load(args.chkpt, map_location=device))
 
+    # TODO
     criterion = torch.nn.MSELoss()
+
     optimizer = torch.optim.Adam(model.parameters(), lr=hp.train.adam)
 
     if hp.scheduler.type == 'Plateau': 
@@ -97,9 +101,10 @@ if __name__ == '__main__':
         train_loss=0
         for i, (batch_data) in enumerate(train_loader):
             step +=1
-
-            input = batch_data['input'].to(device)
-            target = batch_data['target'].to(device)
+            
+            # TODO
+            input = batch_data[''].to(device)
+            target = batch_data[''].to(device)
             output = model(input)
 
             loss = criterion(output,target).to(device)
@@ -113,16 +118,16 @@ if __name__ == '__main__':
                 writer.log_training(loss,step)
 
         train_loss = train_loss/len(train_loader)
-        torch.save(model.state_dict(), str(modelsave_path)+'/lastmodel.pth')
+        torch.save(model.state_dict(), str(modelsave_path)+'/lastmodel.pt')
             
         #### EVAL ####
         model.eval()
         with torch.no_grad():
             test_loss =0.
             for j, (batch_data) in enumerate(test_loader):
+                # TODO
                 input = batch_data['input'].to(device)
                 target = batch_data['target'].to(device)
- 
                 output = model(input)
 
                 loss = criterion(output,target).to(device)
