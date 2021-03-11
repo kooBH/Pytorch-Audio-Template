@@ -1,7 +1,7 @@
 import os, glob
 import torch
 
-class Dataset(torch.utils.data.Dataset):
+class TrainsetModel(torch.utils.data.Dataset):
     def __init__(self, root,target,form, hp):
         self.data_list = [x for x in glob.glob(os.path.join(root,target,form),recursive=True) if not os.path.isdir(x)]
 

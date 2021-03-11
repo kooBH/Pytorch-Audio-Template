@@ -5,14 +5,19 @@ import os
 import numpy as np
 
 from tensorboardX import SummaryWriter
+
+from model.Model import Model
+from dataset.DatasetModel import DatasetModel
+
 from utils.hparams import HParam
 from utils.writer import MyWriter
 
-## import model & dataset
+def spec_to_wav(complex_ri, window, length):
+    audio = torch.istft(input= complex_ri, n_fft=int(1024), hop_length=int(256), win_length=int(1024), window=window, center=True, normalized=False, onesided=True, length=length)
+    return audio
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--modelsave_path', '-m', type=str, required=True)
     parser.add_argument('--config', '-c', type=str, required=True,
                         help="yaml for configuration")
     parser.add_argument('--version_name', '-v', type=str, required=True,
@@ -27,33 +32,46 @@ if __name__ == '__main__':
     device = hp.gpu
     torch.cuda.set_device(device)
 
-    ## get parameters
-
     batch_size = hp.train.batch_size
+    block = hp.model.Model.block
     num_epochs = hp.train.epoch
     num_workers = hp.train.num_workers
 
-    ## dirs
-    modelsave_path = args.modelsave_path +'/'+ args.version_name
-    log_dir = hp.log.root+args.version_name
-    
+    window = torch.hann_window(window_length=hp.audio.frame, periodic=True,
+                               dtype=None, layout=torch.strided, device=None,
+                               requires_grad=False).to(device)
+
+    best_loss = 10
+
+    ## load
+
+    modelsave_path = hp.log.root +'/'+'chkpt' + '/' + args.version_name
+    log_dir = hp.log.root+'/'+'log'+'/'+args.version_name
+
     os.makedirs(modelsave_path,exist_ok=True)
-    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(log_dir,exist_ok=True)
 
     writer = MyWriter(hp, log_dir)
 
-    train_dataset = MyDataset(some_path,'train',hp)
-    val_dataset = MyDataset(some_path,'test', hp)
+
+    ## target
+
+    list_train= ['tr05_bus_simu','tr05_caf_simu','tr05_ped_simu','tr05_str_simu']
+    list_test= ['dt05_bus_simu','dt05_caf_simu','dt05_ped_simu','dt05_str_simu','et05_bus_simu','et05_caf_simu','et05_ped_simu','et05_str_simu']
+
+    train_dataset = DatasetModel(hp.data.root+'/STFT_R',list_train,'*.npy',block=block)
+    test_dataset= DatasetModel(hp.data.root+'/STFT_R',list_test,'*.npy',block=block)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
 
-    model = Model().to(device)
+    model = ModelModel(hp).to(device)
+
     if not args.chkpt == None : 
         print('NOTE::Loading pre-trained model : '+ args.chkpt)
         model.load_state_dict(torch.load(args.chkpt, map_location=device))
 
-    criterion = loss()
+    criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=hp.train.adam)
 
     if hp.scheduler.type == 'Plateau': 
@@ -68,6 +86,8 @@ if __name__ == '__main__':
                 epochs=hp.train.epoch,
                 steps_per_epoch = len(train_loader)
                 )
+    else :
+        raise Exception("Unsupported sceduler type")
 
     step = args.step
 
@@ -78,16 +98,14 @@ if __name__ == '__main__':
         for i, (batch_data) in enumerate(train_loader):
             step +=1
 
-            input_data = batch_data['input'].to(device)
-            target_data = batch_data['target'].to(device)
-           
-            output_data = model(input_data)
+            input = batch_data['input'].to(device)
+            target = batch_data['target'].to(device)
+            output = model(input)
 
-            loss = criterion(output_data,target_data).to(device)
+            loss = criterion(output,target).to(device)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
             print('TRAIN::Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
             train_loss+=loss.item()
 
@@ -100,27 +118,30 @@ if __name__ == '__main__':
         #### EVAL ####
         model.eval()
         with torch.no_grad():
-            val_loss =0.
-            for j, (batch_data) in enumerate(val_loader):
-                input_data = batch_data['input'].to(device)
-                target_data = batch_data['target'].to(device)
-            
-                output_data = model(input_data)
-               
-                loss = criterion(input_audio,target_audio,audio_me_pe,eps=1e-8).to(device)
-                print('TEST::Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, j+1, len(val_loader), loss.item()))
-                val_loss +=loss.item()
+            test_loss =0.
+            for j, (batch_data) in enumerate(test_loader):
+                input = batch_data['input'].to(device)
+                target = batch_data['target'].to(device)
+ 
+                output = model(input)
 
-            val_loss = val_loss/len(val_loader)
-            scheduler.step(val_loss)
+                loss = criterion(output,target).to(device)
 
-            input_audio = input_audio[0].cpu().numpy()
-            target_audio= target_audio[0].cpu().numpy()
-            audio_me_pe= audio_me_pe[0].cpu().numpy()
+                print('TEST::Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
+                test_loss +=loss.item()
 
-            writer.log_evaluation_scalar(val_loss,                                step)
+            test_loss = test_loss/len(test_loader)
+            scheduler.step(test_loss)
 
-            if best_loss > val_loss:
+            #input_audio = wav_noisy[0].cpu().numpy()
+            #target_audio= wav_clean[0].cpu().numpy()
+            #audio_me_pe= audio_me_pe[0].cpu().numpy()
+
+            writer.log_evaluation_scalar(test_loss,step)
+            #                      input_audio,target_audio,audio_me_pe)
+    
+
+            if best_loss > test_loss:
                 torch.save(model.state_dict(), str(modelsave_path)+'/bestmodel.pt')
-                best_loss = val_loss
-               
+                best_loss = test_loss
+
