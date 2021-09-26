@@ -7,7 +7,7 @@ import numpy as np
 from tensorboardX import SummaryWriter
 
 from model.Model import Model
-from dataset.DatasetModel import DatasetModel
+from Dataset import Dataset
 
 from utils.hparams import HParam
 from utils.writer import MyWriter
@@ -115,7 +115,7 @@ if __name__ == '__main__':
             train_loss+=loss.item()
 
             if step %  hp.train.summary_interval == 0:
-                writer.log_training(loss,step)
+                writer.log_value(loss,step,'train loss : '+hp.loss.type)
 
         train_loss = train_loss/len(train_loader)
         torch.save(model.state_dict(), str(modelsave_path)+'/lastmodel.pt')
@@ -136,15 +136,12 @@ if __name__ == '__main__':
                 test_loss +=loss.item()
 
             test_loss = test_loss/len(test_loader)
-            scheduler.step(test_loss)
-
-            #input_audio = wav_noisy[0].cpu().numpy()
-            #target_audio= wav_clean[0].cpu().numpy()
-            #audio_me_pe= audio_me_pe[0].cpu().numpy()
-
-            writer.log_evaluation_scalar(test_loss,step)
-            #                      input_audio,target_audio,audio_me_pe)
-    
+            if hp.scheduler.type == 'Plateau':
+                scheduler.step(test_loss)
+            else :
+                scheduler.step(test_loss)
+            
+            writer.log_value(test_loss,step,'test lost : ' + hp.loss.type)
 
             if best_loss > test_loss:
                 torch.save(model.state_dict(), str(modelsave_path)+'/bestmodel.pt')

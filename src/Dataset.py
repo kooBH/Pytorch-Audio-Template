@@ -1,7 +1,7 @@
 import os, glob
 import torch
 
-class TestsetModel(torch.utils.data.Dataset):
+class Dataset(torch.utils.data.Dataset):
     def __init__(self, hp, is_train=True):
         self.hp = hp
         self.root = hp.data.root
