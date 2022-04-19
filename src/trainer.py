@@ -12,10 +12,6 @@ from Dataset import Dataset
 from utils.hparams import HParam
 from utils.writer import MyWriter
 
-def spec_to_wav(complex_ri, window, length):
-    audio = torch.istft(input= complex_ri, n_fft=int(1024), hop_length=int(256), win_length=int(1024), window=window, center=True, normalized=False, onesided=True, length=length)
-    return audio
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', type=str, required=True,
@@ -30,6 +26,7 @@ if __name__ == '__main__':
     print("NOTE::Loading configuration : "+args.config)
 
     device = hp.gpu
+    version = args.version_name
     torch.cuda.set_device(device)
 
     batch_size = hp.train.batch_size
@@ -45,8 +42,8 @@ if __name__ == '__main__':
 
     ## load
 
-    modelsave_path = hp.log.root +'/'+'chkpt' + '/' + args.version_name
-    log_dir = hp.log.root+'/'+'log'+'/'+args.version_name
+    modelsave_path = hp.log.root +'/'+'chkpt' + '/' + version
+    log_dir = hp.log.root+'/'+'log'+'/'+version
 
     os.makedirs(modelsave_path,exist_ok=True)
     os.makedirs(log_dir,exist_ok=True)
@@ -111,7 +108,7 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            print('TRAIN::Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
+            print('TRAIN::{}: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
             train_loss+=loss.item()
 
             if step %  hp.train.summary_interval == 0:
@@ -132,7 +129,7 @@ if __name__ == '__main__':
 
                 loss = criterion(output,target).to(device)
 
-                print('TEST::Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
+                print('TEST::{}: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
                 test_loss +=loss.item()
 
             test_loss = test_loss/len(test_loader)
