@@ -38,7 +38,7 @@ if __name__ == '__main__':
                                dtype=None, layout=torch.strided, device=None,
                                requires_grad=False).to(device)
 
-    best_loss = 10
+    best_loss = 1e7
 
     ## load
 
@@ -53,12 +53,10 @@ if __name__ == '__main__':
     ## target
 
     ## TODO
-    list_train= ['','']
-    list_test= ['','']
 
     # TODO
-    train_dataset = DatasetModel(hp.data.root+'/STFT',list_train,'*.npy',block=block)
-    test_dataset= DatasetModel(hp.data.root+'/STFT',list_test,'*.npy',block=block)
+    train_dataset = DatasetModel(hp.data.root_train,list_train,'*.npy',block=block)
+    test_dataset= DatasetModel(hp.data.root_test,list_test,'*.npy',block=block)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
@@ -108,7 +106,7 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            print('TRAIN::{}: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
+            print('TRAIN::{} : Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
             train_loss+=loss.item()
 
             if step %  hp.train.summary_interval == 0:
@@ -129,7 +127,7 @@ if __name__ == '__main__':
 
                 loss = criterion(output,target).to(device)
 
-                print('TEST::{}: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
+                print('TEST::{} :  Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
                 test_loss +=loss.item()
 
             test_loss = test_loss/len(test_loader)
