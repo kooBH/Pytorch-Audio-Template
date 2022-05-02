@@ -12,6 +12,19 @@ from Dataset import Dataset
 from utils.hparams import HParam
 from utils.writer import MyWriter
 
+
+def run(data,model,criterion,ret_output=False): 
+    input = data['input'].to(device)
+    target = data['target'].to(device)
+    output = model(input)
+
+    loss = criterion(output,target).to(device)
+
+    if ret_output :
+        return output, loss
+    else : 
+        return loss
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', type=str, required=True,
@@ -34,10 +47,6 @@ if __name__ == '__main__':
     num_epochs = hp.train.epoch
     num_workers = hp.train.num_workers
 
-    window = torch.hann_window(window_length=hp.audio.frame, periodic=True,
-                               dtype=None, layout=torch.strided, device=None,
-                               requires_grad=False).to(device)
-
     best_loss = 1e7
 
     ## load
@@ -55,8 +64,8 @@ if __name__ == '__main__':
     ## TODO
 
     # TODO
-    train_dataset = DatasetModel(hp.data.root_train,list_train,'*.npy',block=block)
-    test_dataset= DatasetModel(hp.data.root_test,list_test,'*.npy',block=block)
+    train_dataset = DatasetModel(hp.data.root_train)
+    test_dataset= DatasetModel(hp.data.root_test)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
@@ -98,16 +107,14 @@ if __name__ == '__main__':
             step +=1
             
             # TODO
-            input = batch_data[''].to(device)
-            target = batch_data[''].to(device)
-            output = model(input)
 
-            loss = criterion(output,target).to(device)
+            loss = run(batch_data,model,criterion)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            train_loss += loss.item()
+           
             print('TRAIN::{} : Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
-            train_loss+=loss.item()
 
             if step %  hp.train.summary_interval == 0:
                 writer.log_value(loss,step,'train loss : '+hp.loss.type)
@@ -120,21 +127,14 @@ if __name__ == '__main__':
         with torch.no_grad():
             test_loss =0.
             for j, (batch_data) in enumerate(test_loader):
-                # TODO
-                input = batch_data['input'].to(device)
-                target = batch_data['target'].to(device)
-                output = model(input)
-
-                loss = criterion(output,target).to(device)
+                loss = run(batch_data,model,criterion)
+                test_loss += loss.item()
 
                 print('TEST::{} :  Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
                 test_loss +=loss.item()
 
             test_loss = test_loss/len(test_loader)
-            if hp.scheduler.type == 'Plateau':
-                scheduler.step(test_loss)
-            else :
-                scheduler.step(test_loss)
+            scheduler.step(test_loss)
             
             writer.log_value(test_loss,step,'test lost : ' + hp.loss.type)
 
