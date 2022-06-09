@@ -33,12 +33,13 @@ if __name__ == '__main__':
                         help="version of current training")
     parser.add_argument('--chkpt',type=str,required=False,default=None)
     parser.add_argument('--step','-s',type=int,required=False,default=0)
+    parser.add_argument('--device','-d',type=str,required=False,default="cuda:0")
     args = parser.parse_args()
 
     hp = HParam(args.config)
     print("NOTE::Loading configuration : "+args.config)
 
-    device = hp.gpu
+    device = args.device
     version = args.version_name
     torch.cuda.set_device(device)
 
@@ -64,8 +65,8 @@ if __name__ == '__main__':
     ## TODO
 
     # TODO
-    train_dataset = DatasetModel(hp.data.root_train)
-    test_dataset= DatasetModel(hp.data.root_test)
+    train_dataset = Dataset(hp.data.root_train)
+    test_dataset= Dataset(hp.data.root_test)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
