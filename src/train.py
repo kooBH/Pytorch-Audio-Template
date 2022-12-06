@@ -57,8 +57,8 @@ if __name__ == '__main__':
     ## TODO
 
     # TODO
-    train_dataset = DatasetModel(hp.data.root_train)
-    test_dataset= DatasetModel(hp.data.root_test)
+    train_dataset = Dataset(hp.data.root_train)
+    test_dataset= Dataset(hp.data.root_test)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
