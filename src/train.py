@@ -12,33 +12,26 @@ from Dataset import Dataset
 from utils.hparams import HParam
 from utils.writer import MyWriter
 
+from common import run
 
-def run(data,model,criterion,ret_output=False): 
-    input = data['input'].to(device)
-    target = data['target'].to(device)
-    output = model(input)
-
-    loss = criterion(output,target).to(device)
-
-    if ret_output :
-        return output, loss
-    else : 
-        return loss
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', type=str, required=True,
                         help="yaml for configuration")
+    parser.add_argument('--default', type=str, default=None,
+                        help="default configuration")
     parser.add_argument('--version_name', '-v', type=str, required=True,
                         help="version of current training")
     parser.add_argument('--chkpt',type=str,required=False,default=None)
     parser.add_argument('--step','-s',type=int,required=False,default=0)
+    parser.add_argument('--device','-d',type=str,required=False,default="cuda:0")
     args = parser.parse_args()
 
-    hp = HParam(args.config)
+    hp = HParam(args.config,args.default)
     print("NOTE::Loading configuration : "+args.config)
 
-    device = hp.gpu
+    device = args.device
     version = args.version_name
     torch.cuda.set_device(device)
 
