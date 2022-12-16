@@ -17,9 +17,9 @@ train:
   checkpoint_interval: 1000
 ---
 loss:
-  type: 'wSDR'
+  type: 'MSE'
 ---
-scheduler: # Plateau, oneCycle, None
+scheduler: # Plateau, oneCycle, CosineAnnealingLR
   type: 'Plateau'
   oneCycle:
     max_lr: 0.0001
@@ -28,16 +28,19 @@ scheduler: # Plateau, oneCycle, None
     patience: 2
     factor: 0.5
     min_lr: 0.000005
+  CosineAnnealingLR : 
+    T_max : 100  # Maximum number of iterations.
+    eta_min : 0.000001
 ---
 data:
   root_train : ""
   root_test : ""
 ---
   log:
-    root: '/home/nas/user/kbh/'
+    root: '/home/nas/user/kbh/TODO'
 ---
 audio:
-  frame : 1024
-  shift : 256
-  sample_rate: 16000
+  n_fft : 1024
+  n_hop : 256
+  sr : 16000
 

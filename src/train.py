@@ -13,6 +13,7 @@ from utils.hparams import HParam
 from utils.writer import MyWriter
 
 from common import run
+#from common import run, get_model
 
 
 if __name__ == '__main__':
@@ -43,7 +44,6 @@ if __name__ == '__main__':
     best_loss = 1e7
 
     ## load
-
     modelsave_path = hp.log.root +'/'+'chkpt' + '/' + version
     log_dir = hp.log.root+'/'+'log'+'/'+version
 
@@ -51,10 +51,6 @@ if __name__ == '__main__':
     os.makedirs(log_dir,exist_ok=True)
 
     writer = MyWriter(hp, log_dir)
-
-    ## target
-
-    ## TODO
 
     # TODO
     train_dataset = Dataset(hp.data.root_train)
@@ -65,13 +61,17 @@ if __name__ == '__main__':
 
     # TODO
     model = ModelModel(hp).to(device)
+    # or model = get_model(hp).to(device)
 
     if not args.chkpt == None : 
         print('NOTE::Loading pre-trained model : '+ args.chkpt)
         model.load_state_dict(torch.load(args.chkpt, map_location=device))
 
     # TODO
-    criterion = torch.nn.MSELoss()
+    if hp.loss.type == "MSELoss":
+        criterion = torch.nn.MSELoss()
+    else :
+        raise Exception("ERROR::Unsupported criterion : {}".format(hp.loss.type))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=hp.train.adam)
 
@@ -87,8 +87,10 @@ if __name__ == '__main__':
                 epochs=hp.train.epoch,
                 steps_per_epoch = len(train_loader)
                 )
+    elif hp.scheduler.type == "CosineAnnealingLR" : 
+       scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=hp.scheduler.CosineAnnealingLR.T_max, eta_min=hp.scheduler.CosineAnnealingLR.eta_min)
     else :
-        raise Exception("Unsupported sceduler type")
+        raise Exception("ERROR::Unsupported sceduler type : {}".format(hp.scheduler.type))
 
     step = args.step
 
