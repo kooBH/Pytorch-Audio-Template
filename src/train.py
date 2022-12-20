@@ -37,7 +37,6 @@ if __name__ == '__main__':
     torch.cuda.set_device(device)
 
     batch_size = hp.train.batch_size
-    block = hp.model.Model.block
     num_epochs = hp.train.epoch
     num_workers = hp.train.num_workers
 
