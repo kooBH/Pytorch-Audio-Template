@@ -130,7 +130,7 @@ if __name__ == '__main__':
             test_loss = test_loss/len(test_loader)
             scheduler.step(test_loss)
             
-            writer.log_value(test_loss,step,'test lost : ' + hp.loss.type)
+            writer.log_value(test_loss,step,'test los : ' + hp.loss.type)
 
             if best_loss > test_loss:
                 torch.save(model.state_dict(), str(modelsave_path)+'/bestmodel.pt')
