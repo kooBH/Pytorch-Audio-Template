@@ -18,6 +18,10 @@ train:
 ---
 loss:
   type: 'MSE'
+  mwMSELoss : 
+    alpha : 0.9
+  wSDRLoss :
+    alpha : 0.99
 ---
 scheduler: # Plateau, oneCycle, CosineAnnealingLR
   type: 'Plateau'
@@ -38,6 +42,7 @@ data:
 ---
   log:
     root: '/home/nas/user/kbh/TODO'
+    plot_spec : False
 ---
 audio:
   n_fft : 1024
