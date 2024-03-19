@@ -15,7 +15,6 @@ from utils.writer import MyWriter
 from common import run
 #from common import run, get_model
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', type=str, required=True,
