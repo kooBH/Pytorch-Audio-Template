@@ -12,7 +12,7 @@ from Dataset import Dataset
 from utils.hparams import HParam
 from utils.writer import MyWriter
 
-from common import run
+from common import run,get_model, evaluate
 #from common import run, get_model
 
 if __name__ == '__main__':
@@ -26,8 +26,12 @@ if __name__ == '__main__':
     parser.add_argument('--chkpt',type=str,required=False,default=None)
     parser.add_argument('--step','-s',type=int,required=False,default=0)
     parser.add_argument('--device','-d',type=str,required=False,default="cuda:0")
+    parser.add_argument('--epoch','-e',type=int,required=False,default=None)
     args = parser.parse_args()
 
+    torch.autograd.set_detect_anomaly(True)
+
+    #hp = HParam(args.config,args.default,merge_except=["architecture"])
     hp = HParam(args.config,args.default)
     print("NOTE::Loading configuration : "+args.config)
 
@@ -36,7 +40,10 @@ if __name__ == '__main__':
     torch.cuda.set_device(device)
 
     batch_size = hp.train.batch_size
-    num_epochs = hp.train.epoch
+    if args.epoch is None : 
+        num_epochs = hp.train.epoch
+    else :
+        num_epochs = args.epoch
     num_workers = hp.train.num_workers
 
     best_loss = 1e7
@@ -57,8 +64,7 @@ if __name__ == '__main__':
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
 
-    # TODO
-    model = ModelModel(hp).to(device)
+    model = get_model(hp,device=device)
     # or model = get_model(hp).to(device)
 
     if not args.chkpt == None : 
@@ -131,7 +137,13 @@ if __name__ == '__main__':
             
             writer.log_value(test_loss,step,'test los : ' + hp.loss.type)
 
+            # metric = evaluate(hp,model,list_eval,device=device)
+            # for m in hp.log.eval : 
+            #     writer.log_value(metric[m],step,m+"_VD")
+
             if best_loss > test_loss:
                 torch.save(model.state_dict(), str(modelsave_path)+'/bestmodel.pt')
                 best_loss = test_loss
+
+    writer.close()
 
