@@ -1,25 +1,39 @@
 import torch
 import torch.nn as nn
 from utils.metric import run_metric
+import librosa as rs
 
 
 def get_model(hp):
 
     return
 
-def run(data,model,criterion,hp,device="cuda:0",ret_output=False): 
-    input = data['input'].to(device)
-    target = data['target'].to(device)
-    output = model(input)
+def run(data,model,hp,criterion=None,device="cuda:0",ret_output=False): 
+    noisy = data['noisy'].to(device)
+    clean = data['clean'].to(device)
+    estim = model(noisy)
 
-    loss = criterion(output,target).to(device)
+    if criterion is None : 
+        return estim
+
+    loss = criterion(estim,clean).to(device)
     if hp.loss.type == "MSELoss" : 
-        loss = criterion(output,target).to(device)
+        loss = criterion(estim,clean).to(device)
     elif hp.loss.type == "wSDRLoss" : 
-        loss = criterion(estim,noisy,target, alpha=hp.loss.wSDRLoss.alpha)
+        loss = criterion(estim,noisy,clean, alpha=hp.loss.wSDRLoss.alpha)
+
+    if loss.isinf().any() : 
+        print("Warning::There is inf in loss, nan_to_num(1e-7)")
+        loss = torch.tensor(0.0).to(loss.device)
+        loss.requires_grad_()
+
+    if loss.isnan().any() : 
+        print("Warning::There is nan in loss, nan_to_num(1e-7)")
+        loss = torch.tensor(0.0).to(loss.device)
+        loss.requires_grad_()
     
-    if ret_output :
-        return output, loss
+    if ret_output:
+        return estim, loss
     else : 
         return loss
 

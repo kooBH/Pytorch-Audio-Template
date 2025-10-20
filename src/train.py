@@ -6,14 +6,13 @@ import numpy as np
 
 from tensorboardX import SummaryWriter
 
-from model.Model import Model
 from Dataset import Dataset
 
 from utils.hparams import HParam
 from utils.writer import MyWriter
 
-from common import run,get_model, evaluate
-#from common import run, get_model
+from common import run,get_model, evaluate, set_seed
+from ptflops import get_model_complexity_info
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -40,6 +39,9 @@ if __name__ == '__main__':
     torch.cuda.set_device(device)
 
     batch_size = hp.train.batch_size
+    if args.batch_size is not None :
+        batch_size = args.batch_size
+
     if args.epoch is None : 
         num_epochs = hp.train.epoch
     else :
@@ -66,6 +68,9 @@ if __name__ == '__main__':
 
     model = get_model(hp,device=device)
     # or model = get_model(hp).to(device)
+
+    macs_ptflos, params_ptflops = get_model_complexity_info(model, (16000,), as_strings=False,print_per_layer_stat=False,verbose=False)   
+    print("ptflops : MACS {}M |  PARAM {}K".format(macs_ptflos/1e6,params_ptflops/1e3))
 
     if not args.chkpt == None : 
         print('NOTE::Loading pre-trained model : '+ args.chkpt)
@@ -106,7 +111,6 @@ if __name__ == '__main__':
             step +=1
             
             # TODO
-
             loss = run(batch_data,model,criterion)
             optimizer.zero_grad()
             loss.backward()
