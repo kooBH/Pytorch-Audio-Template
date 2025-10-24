@@ -37,12 +37,53 @@ scheduler: # Plateau, oneCycle, CosineAnnealingLR
     eta_min : 0.000001
 ---
 data:
-  root_train : ""
-  root_test : ""
+  clean: ""
+  noise: ""
+  eval : 
+    clean : ""
+    noisy : ""
+  len_data : 49152 # 4096 * 12
+  n_item : 65365
+  use_RIR : True
+  deverb_clean : False
+  clean_rir_len : 0
+  RIR_prob : 0.5
+  sr : 16000
+  SNR : [-5,20]
+  target_dB_FS : -15
+  target_dB_FS_floating_value :  10
+  prob_spk : [0.00, 1.00]
+  range_multitalk : [0.2, 0.8]
+  residual_clean :
+    use : False
+    SNR : [20,30]
+  spec_augmentation :
+    use : False
+    time_width : 10
+    freq_width : 5
+  RandomNoise : 
+    use : True
+    prob : 0.05
+    f_decay : 0.0
+  biquad_filter :
+    use : True
+    prob : 0.1
+  remove_dc :
+    use : False
+    prob : 0.25
+  rand_resample : 
+    use : True
+    prob : 0.1
+    r_low : 0.9
+    r_high : 1.1
+  reverbed_speech_noise :
+    use : False
+    prob : 0.1
 ---
   log:
-    root: '/home/nas/user/kbh/TODO'
+    root: '/home/data/kbh/logs/Default'
     plot_spec : False
+    eval : ["PESQ_WB","SISDR","DNSMOS"]
 ---
 audio:
   n_fft : 1024
