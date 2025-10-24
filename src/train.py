@@ -6,7 +6,7 @@ import numpy as np
 
 from tensorboardX import SummaryWriter
 
-from Dataset import Dataset
+from Dataset.DatasetDNS import DatasetDNS
 
 from utils.hparams import HParam
 from utils.writer import MyWriter
@@ -60,8 +60,8 @@ if __name__ == '__main__':
     writer = MyWriter(hp, log_dir)
 
     # TODO
-    train_dataset = Dataset(hp.data.root_train)
-    test_dataset= Dataset(hp.data.root_test)
+    train_dataset = DatasetDNS(hp.data.root_train)
+    test_dataset= DatasetDNS(hp.data.root_test)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)

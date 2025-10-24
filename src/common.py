@@ -37,7 +37,6 @@ def run(data,model,hp,criterion=None,device="cuda:0",ret_output=False):
     else : 
         return loss
 
-
 def evaluate(hp, model,list_data,device="cuda:0"):
     #### EVAL ####
     model.eval()
