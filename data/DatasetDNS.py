@@ -11,7 +11,8 @@ import warnings
 from scipy import signal
 warnings.filterwarnings('ignore')
 
-from Dataset.Augmentation import gen_noise, rand_biquad_filter,remove_dc,rand_resample
+from .Augmentation import gen_noise, rand_biquad_filter,remove_dc,rand_resample
+from .Mixer import mix
 
 def get_list(item,format) : 
     list_item = []
@@ -44,9 +45,11 @@ class DatasetDNS(torch.utils.data.Dataset):
 
             self.eval["no_reverb"] = glob(join(hp.data.dev.root,"no_reverb","noisy","*.wav"),recursive=True)
 
+        self.epoch_count = 0
+
         self.range_SNR = hp.data.SNR
-        self.target_dB_FS = hp.data.target_dB_FS
-        self.target_dB_FS_floating_value = hp.data.target_dB_FS_floating_value
+        self.target_dB_FS = hp.data.Scale.target_dB_FS
+        self.target_dB_FS_floating_value = hp.data.Scale.target_dB_FS_floating_value
 
         self.len_data = hp.data.len_data
         self.n_item = hp.data.n_item
@@ -72,91 +75,8 @@ class DatasetDNS(torch.utils.data.Dataset):
         return wav, idx_start
 
     @staticmethod
-    def norm_amplitude(y, scalar=None, eps=1e-6):
-        if not scalar:
-            scalar = np.max(np.abs(y)) + eps
-
-        return y / scalar, scalar
-
-    @staticmethod
-    def tailor_dB_FS(y, target_dB_FS=-25, eps=1e-6):
-        rms = np.sqrt(np.mean(y ** 2))
-        scalar = 10 ** (target_dB_FS / 10) / (rms + eps)
-        y *= scalar
-        return y, rms, scalar
-
-    @staticmethod
     def is_clipped(y, clipping_threshold=0.999):
         return any(np.abs(y) > clipping_threshold)
-
-    def mix(self,clean,noise,rir,eps=1e-7):
-        # Randomly select RMS value of dBFS between -15 dBFS and -35 dBFS and normalize noisy speech with that value
-        noisy_target_dB_FS = np.random.randint(
-            self.target_dB_FS - self.target_dB_FS_floating_value,
-            self.target_dB_FS + self.target_dB_FS_floating_value
-        )
-        
-        # skip mixing if clean is silent
-        if np.sum(np.abs(clean)) < 1e-13:
-            noise, _, noise_scalar = self.tailor_dB_FS(noise, noisy_target_dB_FS)
-
-            return noise, clean, noise
-
-        if rir is not None:
-            if rir.ndim > 1:
-                rir_idx = np.random.randint(0, rir.shape[0])
-                rir = rir[rir_idx, :]
-
-            if self.hp.data.deverb_clean :
-                if self.hp.data.clean_rir_len <= 0 :
-                    peak = np.argmax(rir)
-                    clean_peak  = signal.fftconvolve(clean,rir[:peak])[:len(clean)]
-                else : 
-                    clean_peak = signal.fftconvolve(clean,rir[:self.hp.data.clean_rir_len])[:len(clean)]
-            clean = signal.fftconvolve(clean, rir)[:len(clean)]
-
-            if self.hp.data.deverb_clean : 
-                clean = clean_peak
-
-        #amp = random.random() * 0.5 + 0.01
-        clean, _ = self.norm_amplitude(clean)
-        #clean *= amp
-        clean, _, _ = self.tailor_dB_FS(clean, self.target_dB_FS)
-        clean_rms = (clean ** 2).mean() ** 0.5
-
-        noise, _ = self.norm_amplitude(noise)
-        #noise *= amp
-        noise, _, _ = self.tailor_dB_FS(noise, self.target_dB_FS)
-        noise_rms = (noise ** 2).mean() ** 0.5
-
-        SNR = np.random.randint(
-            self.range_SNR[0],self.range_SNR[1]
-        )
-
-        snr_scalar = clean_rms / (10 ** (SNR / 10)) / (noise_rms + eps)
-        #snr_scalar = 10**(-SNR/20)
-        noise *= snr_scalar
-        noisy = clean + noise
-
-        #if rir is not None:
-        #    if self.hp.data.deverb_clean : 
-        #        clean = clean_peak
-
-    
-        ## Scaling
-        noisy, _, noisy_scalar = self.tailor_dB_FS(noisy, noisy_target_dB_FS)
-        clean *= noisy_scalar
-
-        M = max(np.max(np.abs(noisy)),np.max(np.abs(noise)),np.max(np.abs(clean))) + eps
-        if M > 1.0 : 
-            noisy = noisy / M
-            clean = clean / M
-            noise = noise / M
-
-        if self.hp.data.spec_augmentation.use : 
-            noisy = self.spec_augment(noisy)
-
-        return noisy, clean, noise
     
     def get_clean_dev(self,path_noisy):
         path_after_root = path_noisy.split(self.hp.data.dev.root)[-1]
@@ -293,8 +213,8 @@ class DatasetDNS(torch.utils.data.Dataset):
             
             
 
-            if self.hp.data.use_RIR : 
-                if self.hp.data.RIR_prob > random.random() :
+            if self.hp.data.Reverb.use : 
+                if self.hp.data.Reverb.prob > random.random() :
                     # sample RIR
                     path_RIR = random.choice(self.list_RIR)
                     RIR = rs.load(path_RIR,sr=self.sr)[0]
@@ -309,8 +229,40 @@ class DatasetDNS(torch.utils.data.Dataset):
             clean,_ = self.match_length(clean)
             noise,_ = self.match_length(noise)
 
+            tSNR = self.range_SNR
+            if self.hp.data.curriculum.use :
+                if self.epoch_count < self.hp.data.curriculum.epoch_easy  : 
+                    tSNR[0] = max(self.range_SNR[0],10)
+                    tSNR[1] = max(self.range_SNR[1],20)
+
             # mix 
-            noisy,clean,noise = self.mix(clean,noise,RIR)
+            #noisy,clean,noise = self.mix(clean,noise,RIR)
+            noisy,clean,noise = mix(clean,noise,RIR,
+                                    # scale
+                                    target_dB_FS  = self.target_dB_FS,
+                                    target_dB_FS_floating_value = self.target_dB_FS_floating_value,
+                                    scale_method = self.hp.data.Scale.method,
+                                    scale_range = self.hp.data.Scale.range,
+                                    # SNR
+                                    range_SNR = tSNR,
+                                    # Reverb
+                                    deverb_clean = self.hp.data.Reverb.deverb_clean,
+                                    clean_rir_len = self.hp.data.Reverb.clean_rir_len
+                                    # SpecAugmentation
+                                    use_spec_augmentation = self.hp.data.spec_augmentation.use,
+                                    spec_n_fft = self.hp.audio.n_fft,
+                                    spec_n_hop = self.hp.audio.n_hop,
+                                    spec_window = self.window,
+                                    spec_time_width = self.hp.data.spec_augmentation.time_width,
+                                    spec_freq_width = self.hp.data.spec_augmentation.freq_width
+                                    )
+
+
+
+            if self.hp.data.clean_only.use : 
+                if self.hp.data.clean_only.prob> random.random() : 
+                    noisy = clean
+                    noise = np.zeros_like(clean)
 
             # clean with residual noise
             if self.hp.data.residual_clean.use : 
@@ -391,7 +343,6 @@ class DatasetDNS(torch.utils.data.Dataset):
         speech, _ = self.match_length(speech)
 
         return speech
-
 
 ## DEV
 if __name__ == "__main__" : 
