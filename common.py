@@ -3,8 +3,14 @@ import torch.nn as nn
 from utils.metric import run_metric
 import librosa as rs
 
+import random
+import numpy as np
+import os
+
 
 def get_model(hp):
+
+    raise NotImplementedError("Model type {} is not implemented".format(hp.model.type))
 
     return
 
@@ -66,3 +72,29 @@ def evaluate(hp, model,list_data,device="cuda:0"):
             key = "{}".format(m)
             metric[key] /= len(list_data)
     return metric
+
+
+def set_seed(seed: int = 42):
+    if seed == -1:
+        #print(f"No Fixed Seed")
+        return
+    #print(f"Fixed Seed : {seed}")
+    # Python
+    random.seed(seed)
+
+    # NumPy
+    np.random.seed(seed)
+
+    # PyTorch (CPU)
+    torch.manual_seed(seed)
+
+    # PyTorch (CUDA)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # multi-GPU 환경
+
+    # CuDNN 설정 (완전한 determinism 보장)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    # 환경 변수 고정 (hash seed 등)
+    os.environ["PYTHONHASHSEED"] = str(seed)

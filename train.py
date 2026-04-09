@@ -14,6 +14,68 @@ from utils.writer import MyWriter
 from common import run,get_model, evaluate, set_seed
 from ptflops import get_model_complexity_info
 
+
+def get_criterion(hp):
+    if hp.loss.type == "MSELoss":
+        criterion = torch.nn.MSELoss()
+    elif hp.loss.type == "ListLoss" :
+        from utils.Loss import ListLoss
+        criterion = ListLoss(
+            hp.loss,
+            hp.loss.ListLoss.list,
+            hp.loss.ListLoss.weight
+        )
+    else : 
+        raise NotImplementedError("Loss type {} is not implemented".format(hp.loss.type))
+    
+    return criterion
+
+def get_optimzer(hp):
+    if hp.train.optimizer == 'Adam' :
+        optimizer = torch.optim.Adam(model.parameters(), lr=hp.train.Adam)
+    elif hp.train.optimizer == 'AdamW' :
+        optimizer = torch.optim.AdamW(model.parameters(), lr=hp.train.AdamW.lr)
+    elif hp.train.optimizer == "AdamP" : 
+        from utils.optimizer import AdamP
+        optimizer = AdamP(model.parameters(), lr=hp.train.AdamP.lr, weight_decay=hp.train.AdamP.weight_decay, betas = hp.train.AdamP.betas, wd_ratio = hp.train.AdamP.wd_ratio,projection = hp.train.AdamP.projection)
+    else :
+        raise Exception("ERROR::Unknown optimizer : {}".format(hp.train.optimizer))
+    return optimizer
+
+def get_scheduler(hp,optimizer,train_loader = None) :
+    if hp.scheduler.type == 'Plateau': 
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+            mode=hp.scheduler.Plateau.mode,
+            factor=hp.scheduler.Plateau.factor,
+            patience=hp.scheduler.Plateau.patience,
+            min_lr=hp.scheduler.Plateau.min_lr)
+    elif hp.scheduler.type == 'oneCycle':
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
+                max_lr = hp.scheduler.oneCycle.max_lr,
+                epochs=hp.train.epoch,
+                steps_per_epoch = len(train_loader)
+          )
+    elif hp.scheduler.type == "LinearPerEpoch" :
+        from utils.schedule import LinearPerEpochScheduler
+        scheduler = LinearPerEpochScheduler(optimizer, len(train_loader))
+    elif hp.scheduler.type == "CosineAnnealingLR" : 
+       scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=hp.scheduler.CosineAnnealingLR.T_max, eta_min=hp.scheduler.CosineAnnealingLR.eta_min) 
+    elif hp.scheduler.type == "StepLR" :
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=hp.scheduler.StepLR.step_size, gamma=hp.scheduler.StepLR.gamma)
+    elif hp.scheduler.type == "CosineAnnealingWarmRestarts" :
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=hp.scheduler.CosineAnnealingWarmRestarts.T_0, T_mult=hp.scheduler.CosineAnnealingWarmRestarts.T_mult, eta_min=hp.scheduler.CosineAnnealingWarmRestarts.eta_min)
+    elif hp.scheduler.type == "Fixed" : 
+        from torch.optim.lr_scheduler import LambdaLR
+        scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 1.0)
+    else :
+        raise Exception("Unsupported sceduler type : {}".format(hp.scheduler.type))
+    
+    warmup = None
+    if hp.scheduler.use_warmup : 
+        from utils.schedule import WarmUpScheduler
+        warmup = WarmUpScheduler(optimizer, len(train_loader))
+    return scheduler, warmup
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', type=str, required=True,
@@ -76,39 +138,21 @@ if __name__ == '__main__':
         print('NOTE::Loading pre-trained model : '+ args.chkpt)
         model.load_state_dict(torch.load(args.chkpt, map_location=device))
 
-    # TODO
-    if hp.loss.type == "MSELoss":
-        criterion = torch.nn.MSELoss()
-    else :
-        raise Exception("ERROR::Unsupported criterion : {}".format(hp.loss.type))
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=hp.train.adam)
-
-    if hp.scheduler.type == 'Plateau': 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-            mode=hp.scheduler.Plateau.mode,
-            factor=hp.scheduler.Plateau.factor,
-            patience=hp.scheduler.Plateau.patience,
-            min_lr=hp.scheduler.Plateau.min_lr)
-    elif hp.scheduler.type == 'oneCycle':
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
-                max_lr = hp.scheduler.oneCycle.max_lr,
-                epochs=hp.train.epoch,
-                steps_per_epoch = len(train_loader)
-                )
-    elif hp.scheduler.type == "CosineAnnealingLR" : 
-       scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=hp.scheduler.CosineAnnealingLR.T_max, eta_min=hp.scheduler.CosineAnnealingLR.eta_min)
-    else :
-        raise Exception("ERROR::Unsupported sceduler type : {}".format(hp.scheduler.type))
+    criterion = get_criterion(hp).to(device)
+    optimizer = get_optimzer(hp)
+    scheduler, warmup = get_scheduler(hp,optimizer,train_loader)
 
     step = args.step
+    log_train_cnt = 0
+    log_dev_cnt = 0
 
     for epoch in range(num_epochs):
         ### TRAIN ####
         model.train()
         train_loss=0
         for i, (batch_data) in enumerate(train_loader):
-            step +=1
+            step +=batch_size
+            log_train_cnt +=batch_size
             
             # TODO
             loss = run(batch_data,model,criterion)
@@ -117,10 +161,11 @@ if __name__ == '__main__':
             optimizer.step()
             train_loss += loss.item()
            
-            print('TRAIN::{} : Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
 
-            if step %  hp.train.summary_interval == 0:
+            if log_train_cnt > hp.train.train_interval :
+                print('TRAIN::{} : Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
                 writer.log_value(loss,step,'train loss : '+hp.loss.type)
+                log_train_cnt = 0
 
         train_loss = train_loss/len(train_loader)
         torch.save(model.state_dict(), str(modelsave_path)+'/lastmodel.pt')
@@ -132,9 +177,12 @@ if __name__ == '__main__':
             for j, (batch_data) in enumerate(test_loader):
                 loss = run(batch_data,model,criterion)
                 test_loss += loss.item()
+                log_dev_cnt += batch_size
 
-                print('TEST::{} :  Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
-                test_loss +=loss.item()
+                if log_dev_cnt > hp.train.dev_interval :
+                    print('TEST::{} :  Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
+                    test_loss +=loss.item()
+                    log_dev_cnt = 0
 
             test_loss = test_loss/len(test_loader)
             scheduler.step(test_loss)
@@ -144,6 +192,30 @@ if __name__ == '__main__':
             # metric = evaluate(hp,model,list_eval,device=device)
             # for m in hp.log.eval : 
             #     writer.log_value(metric[m],step,m+"_VD")
+
+            if epoch % hp.train.eval_interval == 0 or epoch == num_epochs-1:
+                """
+                idx = np.random.randint(0,len(test_dataset))
+                batch_data = test_dataset[idx]
+                noisy,estim,clean = run_sample(batch_data,idx)
+                noisy = noisy[0][0].cpu().numpy()
+                estim = estim[0].cpu().numpy()
+                clean = clean[0].cpu().numpy()
+
+                writer.log_spec(noisy,"noisy_s",step)
+                writer.log_spec(estim,"estim_s",step)
+                writer.log_spec(clean,"clean_s",step)
+
+                writer.log_audio(noisy,"noisy_a",step)
+                writer.log_audio(estim,"estim_a",step)
+                writer.log_audio(clean,"clean_a",step)
+
+                metric = evaluate(hp,model,list_eval,device=device)
+                for m in hp.log.eval : 
+                    writer.log_value(metric[m],step,m+"_custom")
+                    print("METRIC::{} : {} : {:.4f}".format(version,m,metric[m]))   
+                """
+                pass
 
             if best_loss > test_loss:
                 torch.save(model.state_dict(), str(modelsave_path)+'/bestmodel.pt')
